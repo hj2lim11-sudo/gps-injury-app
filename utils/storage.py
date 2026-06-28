@@ -1,20 +1,24 @@
-"""중앙 데이터 저장소 — 모든 Excel 읽기/쓰기."""
-from pathlib import Path
+"""중앙 데이터 저장소 — Google Sheets 읽기/쓰기."""
+import streamlit as st
 import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
 
-DATA_DIR = Path(r"C:\Users\user\Desktop\연구재단시작\데이터")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+# ── Google Sheets 연결 ────────────────────────────────────────────────────────
 
-PATHS = {
-    "players":  DATA_DIR / "players.xlsx",
-    "sessions": DATA_DIR / "session_master.xlsx",
-    "gps":      DATA_DIR / "gps_data.xlsx",
-    "weather":  DATA_DIR / "weather_data.xlsx",
-    "injuries": DATA_DIR / "injury_data.xlsx",
-    "merged":   DATA_DIR / "merged_dataset.xlsx",
+SHEET_NAMES = {
+    "players":  "MJU_Players",
+    "sessions": "GPS_sessions",
+    "gps":      "GPS_gps_data",
+    "weather":  "Weather_data",
+    "injuries": "Injury_data",
+    "merged":   "Merged_dataset",
 }
 
-# ── 스키마 기본값 ─────────────────────────────────────────────────────────────
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
 
 SCHEMA = {
     "players": ["player_id", "jersey_no", "player_name", "position", "birth_year", "active"],
@@ -25,11 +29,13 @@ SCHEMA = {
             "total_distance_km", "distance_per_min", "max_speed",
             "hsr_distance", "sprint_distance", "hsr_count", "sprint_count",
             "med_acc_count", "med_dec_count", "acd_load",
-            "zone1_distance", "zone2_distance", "zone3_distance", "zone4_distance", "zone5_distance"],
-    "weather": ["date", "hour", "temperature", "humidity", "source"],
+            "zone1_distance", "zone2_distance", "zone3_distance", "zone4_distance", "zone5_distance",
+            "temperature", "humidity"],
+    "weather": ["date", "hour", "location", "temperature", "humidity", "source"],
     "injuries": ["injury_id", "date", "player_id", "jersey_no", "player_name",
                  "participated", "injury_status", "body_part", "pain_level",
                  "absence_days", "session_id", "notes"],
+    "merged": [],
 }
 
 GPS_METRIC_COLS = [
@@ -40,26 +46,45 @@ GPS_METRIC_COLS = [
 ]
 
 
+@st.cache_resource
+def _get_client():
+    info = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(dict(info), scopes=SCOPES)
+    return gspread.authorize(creds)
+
+
+def _worksheet(key: str):
+    client = _get_client()
+    return client.open(SHEET_NAMES[key]).sheet1
+
+
 # ── 공통 로드/저장 ────────────────────────────────────────────────────────────
 
 def load(key: str) -> pd.DataFrame:
-    path = PATHS[key]
-    if path.exists():
-        df = pd.read_excel(path, dtype=str)
-        # 누락 컬럼 추가
-        for col in SCHEMA.get(key, []):
-            if col not in df.columns:
-                df[col] = None
-        return df
-    return pd.DataFrame(columns=SCHEMA.get(key, []))
+    ws = _worksheet(key)
+    data = ws.get_all_values()
+    if not data or len(data) < 1:
+        return pd.DataFrame(columns=SCHEMA.get(key, []))
+    headers = data[0]
+    rows = data[1:]
+    df = pd.DataFrame(rows, columns=headers)
+    # 빈 행 제거
+    df = df[df.apply(lambda r: r.str.strip().any(), axis=1)].reset_index(drop=True)
+    # 누락 컬럼 추가
+    for col in SCHEMA.get(key, []):
+        if col not in df.columns:
+            df[col] = ""
+    return df
 
 
 def save(key: str, df: pd.DataFrame) -> None:
-    df.to_excel(PATHS[key], index=False)
+    ws = _worksheet(key)
+    df = df.fillna("").astype(str)
+    ws.clear()
+    ws.update([df.columns.tolist()] + df.values.tolist())
 
 
 def append_rows(key: str, new_rows: pd.DataFrame) -> pd.DataFrame:
-    """기존 데이터에 행 추가 후 저장, 업데이트된 DataFrame 반환."""
     existing = load(key)
     combined = pd.concat([existing, new_rows], ignore_index=True)
     save(key, combined)
@@ -73,7 +98,7 @@ def next_id(key: str, prefix: str) -> str:
     id_col = {"players": "player_id", "sessions": "session_id", "injuries": "injury_id"}[key]
     if df.empty or id_col not in df.columns:
         return f"{prefix}001"
-    nums = df[id_col].dropna().str.extract(r"(\d+)")[0].astype(int, errors="ignore")
+    nums = df[id_col].dropna().str.extract(r"(\d+)")[0]
     nums = pd.to_numeric(nums, errors="coerce").dropna()
     return f"{prefix}{int(nums.max()) + 1:03d}" if not nums.empty else f"{prefix}001"
 
@@ -86,7 +111,6 @@ def player_id_from_jersey(jersey_no) -> str:
 
 
 def get_weather_for_date(target_date: str, target_hour: int = 10) -> dict | None:
-    """weather_data.xlsx에서 날짜·시각에 맞는 기온·습도 반환."""
     df = load("weather")
     if df.empty:
         return None
@@ -94,7 +118,6 @@ def get_weather_for_date(target_date: str, target_hour: int = 10) -> dict | None
     df["hour"] = pd.to_numeric(df["hour"], errors="coerce").fillna(-1).astype(int)
     match = df[(df["date"] == target_date) & (df["hour"] == target_hour)]
     if match.empty:
-        # 같은 날짜 중 가장 가까운 시각
         same_day = df[df["date"] == target_date]
         if same_day.empty:
             return None
@@ -104,7 +127,7 @@ def get_weather_for_date(target_date: str, target_hour: int = 10) -> dict | None
     return {
         "temperature": row.get("temperature"),
         "humidity": row.get("humidity"),
-        "source": row.get("source", "weather_data.xlsx"),
+        "source": row.get("source", "Google Sheets"),
     }
 
 

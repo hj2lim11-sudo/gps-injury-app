@@ -2,7 +2,9 @@
 import streamlit as st
 import pandas as pd
 
+from utils.auth import require_login
 from utils.storage import load, GPS_METRIC_COLS
+require_login()
 
 st.set_page_config(page_title="대시보드", page_icon="📊", layout="wide")
 st.title("📊 대시보드")

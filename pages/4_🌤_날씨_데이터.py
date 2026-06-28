@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from datetime import date
+from utils.auth import require_login
+require_login()
 
 from utils.storage import load, save
 from utils.weather import fetch_range

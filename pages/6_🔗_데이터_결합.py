@@ -2,6 +2,8 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from utils.auth import require_login
+require_login()
 
 from utils.storage import load, save, GPS_METRIC_COLS
 

@@ -2,6 +2,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
+from utils.auth import require_login
+require_login()
 
 from utils.storage import (
     load, save, append_rows, next_id,

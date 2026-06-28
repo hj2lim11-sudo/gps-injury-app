@@ -66,7 +66,9 @@ with tab_view:
         st.subheader("기온 추이")
         daily_avg = (w_show.groupby("date")["temperature"]
                     .mean().round(1).reset_index())
-        st.line_chart(daily_avg.set_index("date"))
+        daily_avg["temperature"] = pd.to_numeric(daily_avg["temperature"], errors="coerce")
+        st.dataframe(daily_avg.rename(columns={"date": "날짜", "temperature": "평균기온(°C)"}),
+                     use_container_width=True, hide_index=True)
 
 # ── 일괄 수집 ─────────────────────────────────────────────────────────────────
 with tab_bulk:

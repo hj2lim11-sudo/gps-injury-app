@@ -10,7 +10,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-KMA_API_KEY    = os.getenv("KMA_API_KEY", "")
+# Streamlit Cloud secrets 또는 .env에서 API 키 읽기
+try:
+    import streamlit as st
+    KMA_API_KEY = st.secrets["kma"]["api_key"]
+except Exception:
+    KMA_API_KEY = os.getenv("KMA_API_KEY", "")
 ASOS_URL       = "http://apis.data.go.kr/1360000/AsosHourlyInfoService/getWthrDataList"
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 GEOCODE_URL    = "https://geocoding-api.open-meteo.com/v1/search"

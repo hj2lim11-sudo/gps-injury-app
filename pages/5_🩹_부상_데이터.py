@@ -6,7 +6,7 @@ from io import BytesIO
 from utils.auth import require_login
 require_login()
 
-from utils.storage import load, save, append_rows, PATHS
+from utils.storage import load, save, append_rows
 
 st.set_page_config(page_title="부상 데이터", page_icon="🩹", layout="wide")
 st.title("🩹 부상 데이터")

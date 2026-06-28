@@ -17,6 +17,10 @@ if gps.empty:
     st.stop()
 
 gps["date"] = pd.to_datetime(gps["date"], errors="coerce")
+# Google Sheets에서 문자열로 오는 수치 컬럼 변환
+for c in GPS_METRIC_COLS + ["temperature", "humidity", "session_order", "duration_min"]:
+    if c in gps.columns:
+        gps[c] = pd.to_numeric(gps[c], errors="coerce")
 gps_sorted = gps.sort_values(["date", "session_order", "player_id"])
 
 # ── 필터 ─────────────────────────────────────────────────────────────────────

@@ -245,6 +245,12 @@ def parse_daily_csv(file_bytes: bytes) -> pd.DataFrame:
     if _is_details_format(df):
         return parse_details_csv(file_bytes)
 
+    # 선수명 컬럼 직접 통일
+    for alias in ("이름", "선수 이름", "선수명", "Player", "player_name"):
+        if alias in df.columns and "player_name" not in df.columns:
+            df = df.rename(columns={alias: "player_name"})
+            break
+
     df = _normalize(df, DAILY_COL_MAP)
 
     if "player_name" not in df.columns:

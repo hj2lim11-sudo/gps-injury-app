@@ -60,6 +60,7 @@ def _worksheet(key: str):
 
 # ── 공통 로드/저장 ────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=60)
 def load(key: str) -> pd.DataFrame:
     ws = _worksheet(key)
     data = ws.get_all_values()
@@ -82,6 +83,7 @@ def save(key: str, df: pd.DataFrame) -> None:
     df = df.fillna("").astype(str)
     ws.clear()
     ws.update([df.columns.tolist()] + df.values.tolist())
+    load.clear()
 
 
 def append_rows(key: str, new_rows: pd.DataFrame) -> pd.DataFrame:

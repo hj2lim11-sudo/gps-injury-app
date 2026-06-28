@@ -12,10 +12,16 @@ st.set_page_config(page_title="업로드 현황", page_icon="📅", layout="wide
 st.title("📅 업로드 현황")
 st.caption("날짜별 GPS · 날씨 · 부상 데이터 입력 여부를 달력으로 확인합니다.")
 
-# ── 데이터 로드 ───────────────────────────────────────────────────────────────
-gps      = load("gps")
-weather  = load("weather")
-injuries = load("injuries")
+# ── 데이터 로드 (5분 캐시) ───────────────────────────────────────────────────
+@st.cache_data(ttl=300)
+def load_all():
+    import time
+    g = load("gps");      time.sleep(1)
+    w = load("weather");  time.sleep(1)
+    i = load("injuries")
+    return g, w, i
+
+gps, weather, injuries = load_all()
 
 def date_set(df, col="date"):
     if df.empty or col not in df.columns:

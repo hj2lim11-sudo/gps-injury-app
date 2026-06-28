@@ -21,7 +21,7 @@ SCOPES = [
 ]
 
 SCHEMA = {
-    "players": ["player_id", "jersey_no", "player_name", "position", "birth_year", "active"],
+    "players": ["player_id", "player_name", "jersey_no", "position", "birth_date", "grade", "height", "prev_school", "active"],
     "sessions": ["session_id", "date", "session_type", "session_order",
                  "start_time", "duration_min", "location", "opponent"],
     "gps": ["session_id", "date", "player_id", "jersey_no", "player_name", "position",

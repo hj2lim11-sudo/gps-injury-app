@@ -1,9 +1,7 @@
 """앱 진입점 — 로그인 후 홈으로 이동."""
 import streamlit as st
 import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
-from pathlib import Path
+import bcrypt
 
 st.set_page_config(
     page_title="GPS 부상위험 데이터 수집",
@@ -12,38 +10,27 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-CONFIG_PATH = Path(__file__).parent / "auth_config.yaml"
+# secrets에서 계정 정보 읽기 (없으면 기본값 admin/admin1234)
+if "auth" in st.secrets:
+    username  = st.secrets["auth"]["username"]
+    name      = st.secrets["auth"]["name"]
+    pw_hash   = st.secrets["auth"]["password"]
+else:
+    username  = "admin"
+    name      = "관리자"
+    pw_hash   = bcrypt.hashpw(b"admin1234", bcrypt.gensalt()).decode()
 
-if not CONFIG_PATH.exists():
-    # 최초 실행 시 기본 설정 생성 (admin / admin1234)
-    import bcrypt
-    hashed = bcrypt.hashpw(b"admin1234", bcrypt.gensalt()).decode()
-    default_cfg = {
-        "credentials": {
-            "usernames": {
-                "admin": {
-                    "name": "관리자",
-                    "password": hashed,
-                }
-            }
-        },
-        "cookie": {
-            "expiry_days": 30,
-            "key": "gps_injury_auth_key_2026",
-            "name": "gps_injury_cookie",
-        },
+credentials = {
+    "usernames": {
+        username: {"name": name, "password": pw_hash}
     }
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        yaml.dump(default_cfg, f, allow_unicode=True)
-
-with open(CONFIG_PATH, encoding="utf-8") as f:
-    config = yaml.load(f, Loader=SafeLoader)
+}
 
 authenticator = stauth.Authenticate(
-    config["credentials"],
-    config["cookie"]["name"],
-    config["cookie"]["key"],
-    config["cookie"]["expiry_days"],
+    credentials,
+    cookie_name="gps_injury_cookie",
+    cookie_key="gps_injury_auth_key_2026",
+    cookie_expiry_days=30,
 )
 
 authenticator.login(location="main")

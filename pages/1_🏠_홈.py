@@ -7,7 +7,7 @@ require_login()
 
 from utils.storage import (
     load, save, append_rows, next_id,
-    is_duplicate_session, GPS_METRIC_COLS,
+    GPS_METRIC_COLS,
 )
 from utils.parser import parse_daily_csv
 from utils.weather import fetch_session_weather, LOCATION_CONFIG
@@ -86,8 +86,14 @@ st.subheader("③ 저장")
 if gps_df is None:
     st.info("GPS 파일을 먼저 업로드하세요.")
 else:
-    if is_duplicate_session(str(sess_date), sess_order):
-        st.warning(f"⚠️ {sess_date} {sess_order}번째 세션이 이미 저장되어 있습니다. 덮어쓰기됩니다.")
+    existing_g_check = load("gps")
+    if not existing_g_check.empty and "date" in existing_g_check.columns:
+        dup_check = (
+            (existing_g_check["date"].astype(str) == str(sess_date)) &
+            (existing_g_check["session_order"].astype(str) == str(sess_order))
+        )
+        if dup_check.any():
+            st.warning(f"⚠️ {sess_date} {sess_order}번째 세션이 이미 저장되어 있습니다. 덮어쓰기됩니다.")
 
     if st.button("💾 GPS + 날씨 저장", type="primary", use_container_width=True):
 
@@ -135,26 +141,8 @@ else:
             except Exception as we:
                 st.warning(f"날씨 수집 실패 (GPS는 저장됨): {we}")
 
-        # ── 세션 마스터 저장 ─────────────────────────────────────────────────
-        session_id = next_id("sessions", "S")
-        existing_s = load("sessions")
-        dup_mask = (
-            (existing_s["date"].astype(str) == str(sess_date)) &
-            (existing_s["session_order"].astype(str) == str(sess_order))
-        )
-        sess_row = pd.DataFrame([{
-            "session_id":    session_id,
-            "date":          str(sess_date),
-            "session_type":  sess_type,
-            "session_order": sess_order,
-            "start_time":    sess_start,
-            "duration_min":  sess_dur,
-            "location":      sess_location,
-            "opponent":      sess_opponent,
-        }])
-        save("sessions", pd.concat([existing_s[~dup_mask], sess_row], ignore_index=True))
-
         # ── GPS 데이터 + 날씨 합쳐서 저장 ───────────────────────────────────
+        session_id = next_id("gps", "S")
         players_db = load("players")
 
         def lookup_player(jersey, name):

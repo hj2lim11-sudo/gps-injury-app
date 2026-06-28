@@ -95,7 +95,7 @@ def append_rows(key: str, new_rows: pd.DataFrame) -> pd.DataFrame:
 
 def next_id(key: str, prefix: str) -> str:
     df = load(key)
-    id_col = {"players": "player_id", "sessions": "session_id", "injuries": "injury_id"}[key]
+    id_col = {"players": "player_id", "gps": "session_id", "injuries": "injury_id"}.get(key, "id")
     if df.empty or id_col not in df.columns:
         return f"{prefix}001"
     nums = df[id_col].dropna().str.extract(r"(\d+)")[0]
@@ -131,8 +131,3 @@ def get_weather_for_date(target_date: str, target_hour: int = 10) -> dict | None
     }
 
 
-def is_duplicate_session(target_date: str, order: int) -> bool:
-    df = load("sessions")
-    if df.empty:
-        return False
-    return not df[(df["date"] == target_date) & (df["session_order"].astype(str) == str(order))].empty

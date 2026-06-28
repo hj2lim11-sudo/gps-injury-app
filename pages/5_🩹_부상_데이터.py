@@ -15,7 +15,11 @@ BODY_PARTS = [
     "", "허벅지 앞(대퇴사두)", "허벅지 뒤(햄스트링)", "종아리", "발목", "무릎",
     "고관절/사타구니", "허리/척추", "발", "어깨", "기타",
 ]
-INJURY_STATUS = ["정상", "부상", "재활 중", "결장", "컨디션 난조"]
+INJURY_STATUS = [
+    "해당없음", "타박", "근육 파열/파손", "근육 경련(쥐)", "인대 손상",
+    "관절 부상", "골절", "과부하/피로 누적", "뛰다가(접질림)", "충돌",
+    "기타",
+]
 PARTICIPATED  = ["O", "X"]
 
 players_db = load("players")
@@ -42,7 +46,7 @@ with tab_upload:
                     "날짜":         "2025-12-26",
                     "선수명":       p["player_name"],
                     "운동참여여부":  "O",
-                    "부상상황":     "정상",
+                    "부상상황":     "해당없음",
                     "부상부위":     "",
                     "통증강도(1-5)": "",
                     "결장일수":     "",
@@ -51,14 +55,14 @@ with tab_upload:
         else:
             template_df = pd.DataFrame([
                 {"날짜": "2025-12-26", "선수명": "홍길동", "운동참여여부": "O",
-                 "부상상황": "정상", "부상부위": "", "통증강도(1-5)": "", "결장일수": ""},
+                 "부상상황": "해당없음", "부상부위": "", "통증강도(1-5)": "", "결장일수": ""},
                 {"날짜": "2025-12-26", "선수명": "김철수", "운동참여여부": "X",
-                 "부상상황": "부상", "부상부위": "햄스트링", "통증강도(1-5)": 6, "결장일수": 7},
+                 "부상상황": "뛰다가(접질림)", "부상부위": "발목", "통증강도(1-5)": 3, "결장일수": 7},
             ])
 
         st.dataframe(template_df, use_container_width=True, hide_index=True)
-        st.caption("부상상황: 정상 / 부상 / 재활 중 / 결장 / 컨디션 난조")
-        st.caption("통증강도: 0(없음) ~ 10(극심)")
+        st.caption("부상상황: 해당없음 / 타박 / 근육 파열·경련 / 인대 손상 / 뛰다가(접질림) 등")
+        st.caption("통증강도: 0(없음) ~ 5(극심)")
 
         buf = BytesIO()
         template_df.to_excel(buf, index=False)
@@ -236,7 +240,7 @@ with tab_view:
         fc1, fc2, fc3, fc4 = st.columns(4)
         sel_p   = fc1.multiselect("선수", inj["player_name"].dropna().unique())
         sel_par = fc2.multiselect("참여여부", ["O", "X"])
-        sel_st  = fc3.multiselect("부상상황", INJURY_STATUS)
+        sel_st  = fc3.multiselect("부상원인", INJURY_STATUS)
         date_range = fc4.date_input("기간", value=[], key="view_date")
 
         filtered = inj.copy()

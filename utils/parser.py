@@ -39,7 +39,7 @@ DETAILS_COL_MAP = {
 # Stats_by_Player 형식 (기존 호환)
 DAILY_COL_MAP = {
     # 선수 정보
-    "선수명": "player_name", "선수 이름": "player_name", "Player": "player_name",
+    "선수명": "player_name", "선수 이름": "player_name", "이름": "player_name", "Player": "player_name",
     "등번호": "jersey_no",   "No": "jersey_no", "No.": "jersey_no",
     "포지션": "position",    "Position": "position",
     # 기본 지표

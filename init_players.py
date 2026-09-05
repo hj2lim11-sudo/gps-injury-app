@@ -7,7 +7,7 @@ import streamlit as st
 os.environ.setdefault("STREAMLIT_SECRETS_FILE",
                       os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml"))
 
-import toml, pandas as pd, gspread
+import tomllib, pandas as pd, gspread
 from google.oauth2.service_account import Credentials
 
 SCOPES = [
@@ -15,7 +15,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-secrets = toml.load(os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml"))
+with open(os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml"), "rb") as f:
+    secrets = tomllib.load(f)
 info = secrets["gcp_service_account"]
 creds = Credentials.from_service_account_info(info, scopes=SCOPES)
 client = gspread.authorize(creds)

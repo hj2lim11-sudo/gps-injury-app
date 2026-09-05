@@ -245,6 +245,9 @@ def parse_daily_csv(file_bytes: bytes) -> pd.DataFrame:
     if _is_details_format(df):
         return parse_details_csv(file_bytes)
 
+    # 컬럼명 공백 제거
+    df.columns = [c.strip() for c in df.columns]
+
     # 선수명 컬럼 직접 통일
     for alias in ("이름", "선수 이름", "선수명", "Player", "player_name"):
         if alias in df.columns and "player_name" not in df.columns:
@@ -274,6 +277,51 @@ def parse_daily_csv(file_bytes: bytes) -> pd.DataFrame:
 
 
 # ── Trend CSV (ACD Load 추출, details 없을 때 보조) ──────────────────────────
+
+def parse_gps_bytes(file_bytes: bytes, filename: str, players_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    업로드된 GPS 파일(Excel/CSV)을 파싱해 선수별 GPS 지표 DataFrame 반환.
+    players_df: MJU_Players 시트 (player_id, jersey_no, player_name 포함)
+    """
+    fname = filename.lower()
+    if fname.endswith((".xlsx", ".xls")):
+        raw = pd.read_excel(BytesIO(file_bytes))
+        # 시트가 여러 개면 첫 번째 사용
+        raw.columns = [str(c).strip() for c in raw.columns]
+    else:
+        raw = _read_csv(file_bytes)
+        raw.columns = [c.strip() for c in raw.columns]
+
+    if _is_details_format(raw):
+        df = parse_details_csv(file_bytes)
+    else:
+        df = parse_daily_csv(file_bytes)
+
+    # 선수 player_id 매칭 (등번호 기준)
+    if not players_df.empty and "jersey_no" in players_df.columns:
+        players_df = players_df.copy()
+        players_df["jersey_no"] = pd.to_numeric(players_df["jersey_no"], errors="coerce")
+        df["jersey_no"] = pd.to_numeric(df.get("jersey_no"), errors="coerce")
+        df = df.merge(
+            players_df[["player_id", "jersey_no", "player_name"]].rename(
+                columns={"player_name": "_p_name"}
+            ),
+            on="jersey_no", how="left",
+        )
+        # player_name: 파일 우선, 없으면 명단에서
+        if "player_name" not in df.columns:
+            df["player_name"] = df["_p_name"]
+        else:
+            df["player_name"] = df["player_name"].where(
+                df["player_name"].notna() & (df["player_name"].astype(str).str.strip() != ""),
+                df["_p_name"],
+            )
+        df = df.drop(columns=["_p_name"], errors="ignore")
+    else:
+        df["player_id"] = ""
+
+    return df.reset_index(drop=True)
+
 
 def parse_trend_csv(file_bytes: bytes) -> dict:
     """Trend CSV → {player_name: acd_load}"""

@@ -144,7 +144,12 @@ def _fetch_asos(stn_id: int, target_date: str, target_hour: int) -> dict:
         hum  = item.get("hm")
         if temp is None or hum is None:
             return {"error": "기온/습도 값 없음"}
+        rn = item.get("rn")
         return {
+            "temperature_c":     round(float(temp), 1),
+            "humidity_pct":      round(float(hum),  1),
+            "precipitation_mm":  round(float(rn), 1) if rn else 0.0,
+            # backward compat keys
             "temperature": round(float(temp), 1),
             "humidity":    round(float(hum),  1),
             "source":      f"기상청 ASOS 실측 (관측소 {stn_id})",
@@ -226,16 +231,25 @@ def fetch_session_weather(
     for h in range(start_h, end_h + 1):
         r = fetch_weather(location, target_date, h)
         if "error" not in r:
-            hourly.append({"hour": h, "temperature": r["temperature"], "humidity": r["humidity"]})
+            hourly.append({
+                "hour":             h,
+                "temperature_c":    r["temperature_c"],
+                "humidity_pct":     r["humidity_pct"],
+                "precipitation_mm": r.get("precipitation_mm", 0.0),
+            })
             sources.append(r["source"])
 
     if not hourly:
         return {"error": f"날씨 수집 실패 ({target_date} {start_h}~{end_h}시)"}
 
-    avg_temp = round(sum(x["temperature"] for x in hourly) / len(hourly), 1)
-    avg_humi = round(sum(x["humidity"]    for x in hourly) / len(hourly), 1)
+    avg_temp = round(sum(x["temperature_c"] for x in hourly) / len(hourly), 1)
+    avg_humi = round(sum(x["humidity_pct"]  for x in hourly) / len(hourly), 1)
+    avg_prec = round(sum(x.get("precipitation_mm", 0) for x in hourly) / len(hourly), 1)
 
     return {
+        "temperature_c":    avg_temp,
+        "humidity_pct":     avg_humi,
+        "precipitation_mm": avg_prec,
         "temperature": avg_temp,
         "humidity":    avg_humi,
         "source":      sources[0] if sources else "unknown",

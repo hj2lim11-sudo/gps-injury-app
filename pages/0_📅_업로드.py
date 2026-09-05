@@ -1,5 +1,7 @@
 """달력 기반 GPS 데이터 업로드 — 날짜 선택 → 파일 업로드 → 날씨 자동 결합 → 저장."""
 import streamlit as st
+st.set_page_config(page_title="데이터 업로드", page_icon="📅", layout="wide")
+
 import pandas as pd
 import calendar
 from datetime import date, datetime
@@ -16,7 +18,6 @@ from utils.storage import (
 from utils.parser import parse_gps_bytes
 from utils.weather import fetch_session_weather
 
-st.set_page_config(page_title="데이터 업로드", page_icon="📅", layout="wide")
 st.title("📅 GPS 데이터 업로드")
 
 # ── 세션 상태 초기화 ───────────────────────────────────────────────────────────

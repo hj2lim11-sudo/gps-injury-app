@@ -176,9 +176,14 @@ def _fetch_open_meteo(lat: float, lon: float, target_date: str, target_hour: int
                else min(range(len(times)),
                         key=lambda i: abs(datetime.fromisoformat(times[i]) -
                                           datetime.strptime(target_str, "%Y-%m-%dT%H:%M"))))
+        t = round(float(data["temperature_2m"][idx]), 1)
+        h = round(float(data["relative_humidity_2m"][idx]), 1)
         return {
-            "temperature": round(float(data["temperature_2m"][idx]), 1),
-            "humidity":    round(float(data["relative_humidity_2m"][idx]), 1),
+            "temperature_c":    t,
+            "humidity_pct":     h,
+            "precipitation_mm": 0.0,
+            "temperature": t,
+            "humidity":    h,
             "source":      "Open-Meteo reanalysis (fallback)",
         }
     except Exception as e:

@@ -1,5 +1,7 @@
 """GPS + 날씨 결합 데이터 조회 및 다운로드."""
 import streamlit as st
+st.set_page_config(page_title="데이터 조회", page_icon="📊", layout="wide")
+
 import pandas as pd
 from io import BytesIO
 
@@ -7,14 +9,19 @@ from utils.auth import require_login
 require_login()
 
 from utils.storage import load, GPS_METRIC_COLS
-
-st.set_page_config(page_title="데이터 조회", page_icon="📊", layout="wide")
 st.title("📊 GPS · 날씨 데이터 조회")
 
 gps = load("gps")
 
 if gps.empty:
     st.info("저장된 데이터가 없습니다. 📅 업로드 페이지에서 GPS 파일을 먼저 업로드하세요.")
+    st.stop()
+
+# 구 스키마(date) → 신 스키마(session_date) 호환
+if "session_date" not in gps.columns and "date" in gps.columns:
+    gps = gps.rename(columns={"date": "session_date"})
+if "session_date" not in gps.columns:
+    st.warning("데이터 컬럼 구조가 맞지 않습니다. GPS_gps_data 시트를 초기화한 뒤 다시 업로드해주세요.")
     st.stop()
 
 # 수치 변환

@@ -38,7 +38,7 @@ authenticator.login(location="main")
 if st.session_state.get("authentication_status"):
     authenticator.logout("로그아웃", location="sidebar")
     st.sidebar.write(f"👤 {st.session_state['name']} 님")
-    st.switch_page("pages/1_🏠_홈.py")
+    st.switch_page("pages/0_📅_업로드.py")
 elif st.session_state.get("authentication_status") is False:
     st.error("아이디 또는 비밀번호가 틀렸습니다.")
 else:

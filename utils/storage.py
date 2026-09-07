@@ -49,7 +49,7 @@ SCHEMA = {
 
 WEEKDAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
 TIME_BANDS  = ["AM", "PM", "DAWN", "NIGHT"]
-EVENT_CODES = ["TRAINING", "MATCH", "FITNESS", "RECOVERY", "OTHER"]
+EVENT_CODES = ["FIELD", "MATCH", "GYM", "MIXED", "OTHER"]
 
 
 def season_year_from_date(d: str) -> int:

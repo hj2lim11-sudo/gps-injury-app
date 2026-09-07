@@ -8,7 +8,10 @@ from io import BytesIO
 from utils.auth import require_login
 require_login()
 
-from utils.storage import load, GPS_METRIC_COLS
+from utils.storage import load, GPS_METRIC_COLS, KR_COLS
+
+def to_kr(df):
+    return df.rename(columns={k: v for k, v in KR_COLS.items() if k in df.columns})
 st.title("📊 GPS · 날씨 데이터 조회")
 
 gps = load("gps")
@@ -71,15 +74,16 @@ META_SHOW = ["session_date", "session_id", "training_time_band", "event_code",
 
 with tab_all:
     show_cols = [c for c in META_SHOW + GPS_METRIC_COLS if c in filtered.columns]
-    st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
+    st.dataframe(to_kr(filtered[show_cols]), use_container_width=True, hide_index=True)
     st.caption(f"{len(filtered)}행")
 
+    out = to_kr(filtered[show_cols])
     buf = BytesIO()
-    filtered[show_cols].to_excel(buf, index=False)
+    out.to_excel(buf, index=False)
     st.download_button("⬇️ Excel 다운로드", buf.getvalue(),
                        file_name="gps_data.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    csv_buf = filtered[show_cols].to_csv(index=False).encode("utf-8-sig")
+    csv_buf = out.to_csv(index=False).encode("utf-8-sig")
     st.download_button("⬇️ CSV 다운로드", csv_buf,
                        file_name="gps_data.csv", mime="text/csv")
 
@@ -91,7 +95,7 @@ with tab_session:
                           "temperature_c", "humidity_pct", "precipitation_mm"])[num_cols]
         .mean().round(2).reset_index()
     )
-    st.dataframe(by_sess, use_container_width=True, hide_index=True)
+    st.dataframe(to_kr(by_sess), use_container_width=True, hide_index=True)
     st.caption("선수 평균값")
 
 with tab_player:
@@ -100,5 +104,5 @@ with tab_player:
         filtered.groupby(["player_id", "jersey_no", "player_name"])[num_cols]
         .mean().round(2).reset_index()
     )
-    st.dataframe(by_player, use_container_width=True, hide_index=True)
+    st.dataframe(to_kr(by_player), use_container_width=True, hide_index=True)
     st.caption("전체 기간 선수 평균값")

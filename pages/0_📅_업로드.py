@@ -10,11 +10,14 @@ from utils.auth import require_login
 require_login()
 
 from utils.storage import (
-    load, append_rows, next_session_seq,
+    load, save, append_rows, next_session_seq,
     make_session_id, season_year_from_date, weekday_kr,
     time_band_from_hour, GPS_META_COLS, GPS_METRIC_COLS,
-    TIME_BANDS, EVENT_CODES,
+    TIME_BANDS, EVENT_CODES, KR_COLS,
 )
+
+def to_kr(df):
+    return df.rename(columns={k: v for k, v in KR_COLS.items() if k in df.columns})
 from utils.parser import parse_gps_bytes
 from utils.weather import fetch_session_weather
 
@@ -266,15 +269,31 @@ with col_save:
         for e in errors:
             st.error(e)
 
-# ── 이 날짜 기존 데이터 미리보기 ──────────────────────────────────────────────
+# ── 이 날짜 기존 데이터 미리보기 + 세션 삭제 ─────────────────────────────────
 existing = load("gps")
 if not existing.empty and "session_date" in existing.columns:
     day_data = existing[existing["session_date"] == sel]
     if not day_data.empty:
         st.divider()
         st.subheader(f"📋 {sel} 저장된 데이터 ({len(day_data)}행)")
+
         show_cols = ["session_id", "training_time_band", "event_code", "venue",
                      "player_name", "temperature_c", "humidity_pct", "precipitation_mm",
                      "total_distance_km", "max_speed"]
-        st.dataframe(day_data[[c for c in show_cols if c in day_data.columns]],
+        st.dataframe(to_kr(day_data[[c for c in show_cols if c in day_data.columns]]),
                      use_container_width=True, hide_index=True)
+
+        # 세션 삭제
+        sessions_on_day = day_data["session_id"].unique().tolist()
+        st.markdown("**🗑️ 세션 삭제**")
+        del_col1, del_col2 = st.columns([2, 1])
+        del_session = del_col1.selectbox(
+            "삭제할 세션 선택", sessions_on_day, key=f"del_sess_{sel}"
+        )
+        if del_col2.button("삭제", type="secondary", key=f"del_btn_{sel}"):
+            updated = existing[existing["session_id"] != del_session]
+            with st.spinner("삭제 중..."):
+                save("gps", updated)
+            _uploaded_dates.clear()
+            st.success(f"✅ {del_session} 삭제 완료")
+            st.rerun()

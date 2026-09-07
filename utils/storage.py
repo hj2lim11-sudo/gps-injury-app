@@ -27,8 +27,10 @@ GPS_META_COLS = [
 GPS_METRIC_COLS = [
     "total_distance_km", "distance_per_min", "max_speed",
     "hsr_distance", "sprint_distance", "hsr_count", "sprint_count",
-    "med_acc_count", "med_dec_count", "acd_load",
+    "high_acc_count", "high_acc_distance", "high_dec_count", "high_dec_distance",
+    "max_acc", "max_dec", "acd_load",
     "zone1_distance", "zone2_distance", "zone3_distance", "zone4_distance", "zone5_distance",
+    "acr_distance", "acr_hsr", "acr_sprint", "acr_acd_load",
 ]
 
 SCHEMA = {

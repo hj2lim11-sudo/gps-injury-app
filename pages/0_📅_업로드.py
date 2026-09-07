@@ -44,7 +44,8 @@ def _uploaded_dates():
 uploaded = _uploaded_dates()
 
 # ── 연월 선택 ─────────────────────────────────────────────────────────────────
-today = date.today()
+today    = date.today()
+MIN_DATE = date(2025, 12, 26)
 hdr1, hdr2, hdr3 = st.columns([1, 1, 5])
 year  = hdr1.number_input("년", 2025, 2028, today.year, label_visibility="collapsed")
 month = hdr2.number_input("월", 1, 12, today.month, label_visibility="collapsed")
@@ -74,6 +75,10 @@ for week in cal:
                 st.markdown("<div style='height:64px'></div>", unsafe_allow_html=True)
                 continue
             d_str    = f"{int(year):04d}-{int(month):02d}-{day:02d}"
+            d_date   = date(int(year), int(month), day)
+            if d_date < MIN_DATE:
+                st.markdown("<div style='height:64px'></div>", unsafe_allow_html=True)
+                continue
             has_data = d_str in uploaded
             is_sel   = (d_str == st.session_state.selected_date)
             is_today = (d_str == today.strftime("%Y-%m-%d"))

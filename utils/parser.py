@@ -84,13 +84,44 @@ DAILY_COL_MAP = {
 
 ACD_COL_CANDIDATES = ["ACD Load", "acd_load", "ACD부하", "ACD 부하"]
 
+# ── Trend CSV 컬럼 매핑 ───────────────────────────────────────────────────────
+TREND_COL_MAP = {
+    "이름":                              "player_name",
+    "등번호":                            "jersey_no",
+    "뛴 시간 (min)":                     "duration_min",
+    "뛴 거리 (km)":                      "total_distance_km",
+    "분당 뛴 거리 (m/min)":              "distance_per_min",
+    "최고 속도 (km/h)":                  "max_speed",
+    "최대 가속 (m/s^2)":                 "max_acc",
+    "최대 감속 (m/s^2)":                 "max_dec",
+    "ACD Load":                          "acd_load",
+    "HSR 거리 (m)":                      "hsr_distance",
+    "Sprint 거리 (m)":                   "sprint_distance",
+    "HSR 횟수 (times)":                  "hsr_count",
+    "Sprint 횟수 (times)":               "sprint_count",
+    "High Acceleration 횟수 (times)":    "high_acc_count",
+    "High Acceleration 거리 (m)":        "high_acc_distance",
+    "High Deceleration 횟수 (times)":   "high_dec_count",
+    "High Deceleration 거리 (m)":       "high_dec_distance",
+    "뛴 거리 (ACR)":                     "acr_distance",
+    "HSR 거리 (ACR)":                    "acr_hsr",
+    "Sprint 거리 (ACR)":                 "acr_sprint",
+    "ACD Load (ACR)":                    "acr_acd_load",
+    "속도 1구간 거리 (km)":              "zone1_distance",
+    "속도 2구간 거리 (km)":              "zone2_distance",
+    "속도 3구간 거리 (km)":              "zone3_distance",
+    "속도 4구간 거리 (km)":              "zone4_distance",
+    "속도 5구간 거리 (km)":              "zone5_distance",
+}
+
 GPS_METRIC_COLS = [
     "total_distance_km", "distance_per_min", "max_speed",
     "hsr_distance", "sprint_distance", "hsr_count", "sprint_count",
-    "med_acc_count", "med_dec_count", "acd_load",
+    "high_acc_count", "high_acc_distance", "high_dec_count", "high_dec_distance",
+    "max_acc", "max_dec", "acd_load",
     "zone1_distance", "zone2_distance", "zone3_distance",
     "zone4_distance", "zone5_distance",
-    "avg_hr", "max_hr", "max_acc", "max_dec",
+    "acr_distance", "acr_hsr", "acr_sprint", "acr_acd_load",
 ]
 
 
@@ -106,6 +137,12 @@ def _read_csv(file_bytes: bytes) -> pd.DataFrame:
 def _is_details_format(df: pd.DataFrame) -> bool:
     """Fitogether details CSV 형식 판별."""
     return "날짜" in df.columns and "액티비티 이름" in df.columns
+
+
+def _is_trend_format(df: pd.DataFrame) -> bool:
+    """Trend CSV 형식 판별 — High Acceleration 컬럼 존재 여부로 확인."""
+    cols = [c.strip() for c in df.columns]
+    return any("High Acceleration" in c or "High Deceleration" in c for c in cols)
 
 
 def _normalize(df: pd.DataFrame, col_map: dict) -> pd.DataFrame:
@@ -276,6 +313,32 @@ def parse_daily_csv(file_bytes: bytes) -> pd.DataFrame:
     return df[[c for c in keep if c in df.columns]].reset_index(drop=True)
 
 
+# ── Trend CSV 전체 파싱 ───────────────────────────────────────────────────────
+
+def parse_trend_full_csv(file_bytes: bytes) -> pd.DataFrame:
+    """Trend CSV 파싱 → 선수별 GPS 지표 DataFrame."""
+    df = _read_csv(file_bytes)
+    df.columns = [c.strip() for c in df.columns]
+    df = _normalize(df, TREND_COL_MAP)
+
+    if "player_name" not in df.columns:
+        raise ValueError(f"선수명 컬럼 없음. 현재 컬럼: {list(df.columns)}")
+
+    df = df[df["player_name"].notna()]
+    df = df[~df["player_name"].astype(str).str.contains(
+        r"합계|평균|total|average|팀", case=False, na=False)]
+
+    if "jersey_no" not in df.columns:
+        df["jersey_no"] = None
+
+    df["jersey_no"] = pd.to_numeric(df["jersey_no"], errors="coerce")
+    df = _to_numeric(df, GPS_METRIC_COLS)
+
+    keep = ["jersey_no", "player_name"] + \
+           [c for c in GPS_METRIC_COLS if c in df.columns]
+    return df[[c for c in keep if c in df.columns]].reset_index(drop=True)
+
+
 # ── Trend CSV (ACD Load 추출, details 없을 때 보조) ──────────────────────────
 
 def parse_gps_bytes(file_bytes: bytes, filename: str, players_df: pd.DataFrame) -> pd.DataFrame:
@@ -294,6 +357,8 @@ def parse_gps_bytes(file_bytes: bytes, filename: str, players_df: pd.DataFrame) 
 
     if _is_details_format(raw):
         df = parse_details_csv(file_bytes)
+    elif _is_trend_format(raw):
+        df = parse_trend_full_csv(file_bytes)
     else:
         df = parse_daily_csv(file_bytes)
 

@@ -44,20 +44,26 @@ m4.metric("등록 선수 수",   gps["player_name"].nunique())
 st.divider()
 
 # ── 필터 (사이드바) ───────────────────────────────────────────────────────────
+min_date = gps["session_date"].min().date()
+max_date = gps["session_date"].max().date()
+
 with st.sidebar:
     st.header("필터")
-    dates = sorted(gps["session_date"].dropna().dt.strftime("%Y-%m-%d").unique(), reverse=True)
-    sel_dates = st.multiselect("날짜", dates, default=dates[:10] if len(dates) >= 10 else dates)
+    date_range = st.date_input(
+        "날짜 범위", value=(min_date, max_date),
+        min_value=min_date, max_value=max_date,
+    )
 
-    events = gps["event_code"].dropna().unique().tolist()
+    events = sorted(gps["event_code"].dropna().unique().tolist())
     sel_events = st.multiselect("이벤트", events, default=events)
 
     players = sorted(gps["player_name"].dropna().unique())
     sel_players = st.multiselect("선수", players)
 
 filtered = gps.copy()
-if sel_dates:
-    filtered = filtered[filtered["session_date"].dt.strftime("%Y-%m-%d").isin(sel_dates)]
+if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+    start_d, end_d = pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1])
+    filtered = filtered[(filtered["session_date"] >= start_d) & (filtered["session_date"] <= end_d)]
 if sel_events:
     filtered = filtered[filtered["event_code"].isin(sel_events)]
 if sel_players:

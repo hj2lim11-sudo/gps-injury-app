@@ -63,6 +63,7 @@ if sel_events:
 if sel_players:
     filtered = filtered[filtered["player_name"].isin(sel_players)]
 
+filtered = filtered.sort_values(["session_date", "session_id", "jersey_no"]).reset_index(drop=True)
 filtered["session_date"] = filtered["session_date"].dt.strftime("%Y-%m-%d")
 
 # ── 탭 뷰 ─────────────────────────────────────────────────────────────────────

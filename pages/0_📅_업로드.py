@@ -103,6 +103,7 @@ for week in cal:
             if st.button("선택", key=f"sel_{d_str}", use_container_width=True,
                          help=d_str, type="secondary"):
                 st.session_state.selected_date = d_str
+                st.session_state._scroll_to_form = True
                 st.rerun()
 
 # ── 업로드 폼 ─────────────────────────────────────────────────────────────────
@@ -114,6 +115,13 @@ if not sel:
 st.divider()
 wd = weekday_kr(sel)
 st.subheader(f"📂 {sel} ({wd}) — GPS 업로드")
+
+if st.session_state.get("_scroll_to_form"):
+    st.session_state._scroll_to_form = False
+    st.components.v1.html(
+        "<script>window.parent.document.querySelector('section.main').scrollTo({top: 99999, behavior: 'smooth'});</script>",
+        height=0,
+    )
 
 if sel in uploaded:
     st.info("이 날짜는 이미 데이터가 있습니다. 추가 세션을 업로드하거나 저장하면 기존 데이터에 추가됩니다.")

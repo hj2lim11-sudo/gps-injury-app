@@ -140,8 +140,11 @@ with tab_edit:
     if players.empty:
         st.info("등록된 선수가 없습니다.")
     else:
+        def _jersey(v):
+            n = pd.to_numeric(v, errors="coerce")
+            return int(n) if pd.notna(n) else 0
         player_opts = {
-            f"{row['player_id']} | #{int(pd.to_numeric(row.get('jersey_no', 0), errors='coerce') or 0):02d} {row['player_name']}": idx
+            f"{row['player_id']} | #{_jersey(row.get('jersey_no', 0)):02d} {row['player_name']}": idx
             for idx, row in players.iterrows()
         }
         sel_label = st.selectbox("선수 선택", list(player_opts.keys()))
@@ -151,7 +154,8 @@ with tab_edit:
         with st.form("edit_player"):
             c1, c2, c3, c4 = st.columns(4)
             new_name   = c1.text_input("선수명", value=str(sel.get("player_name", "")))
-            new_jersey = c2.number_input("등번호", value=int(pd.to_numeric(sel.get("jersey_no", 1), errors="coerce") or 1), min_value=1, max_value=99)
+            _j = pd.to_numeric(sel.get("jersey_no", ""), errors="coerce")
+            new_jersey = c2.number_input("등번호", value=int(_j) if pd.notna(_j) and _j > 0 else 1, min_value=1, max_value=99)
             pos_idx    = POSITIONS.index(sel.get("position")) if sel.get("position") in POSITIONS else 0
             new_pos    = c3.selectbox("포지션", POSITIONS, index=pos_idx)
             new_birth  = c4.text_input("생년월일", value=str(sel.get("birth_date", "")))
@@ -160,7 +164,8 @@ with tab_edit:
             grade_opts = ["1학년", "2학년", "3학년", "4학년", "기타"]
             g_idx = grade_opts.index(sel.get("grade")) if sel.get("grade") in grade_opts else 4
             new_grade  = c5.selectbox("학년", grade_opts, index=g_idx)
-            new_height = c6.number_input("키 (cm)", value=int(pd.to_numeric(sel.get("height", 175), errors="coerce") or 175), min_value=140, max_value=220)
+            _h = pd.to_numeric(sel.get("height", ""), errors="coerce")
+            new_height = c6.number_input("키 (cm)", value=int(_h) if pd.notna(_h) and _h > 0 else 175, min_value=140, max_value=220)
             new_prev   = c7.text_input("전 출신학교", value=str(sel.get("prev_school", "")))
             new_active = st.checkbox("활성 선수", value=str(sel.get("active", "True")) == "True")
 

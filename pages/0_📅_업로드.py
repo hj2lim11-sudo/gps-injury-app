@@ -38,7 +38,7 @@ if st.session_state.selected_date != st.session_state._prev_date:
     st.session_state._prev_date = st.session_state.selected_date
 
 # ── 업로드 현황 로드 ──────────────────────────────────────────────────────────
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=300)
 def _uploaded_dates():
     gps = load("gps")
     if gps.empty or "session_date" not in gps.columns:
@@ -327,9 +327,9 @@ if not existing.empty and "session_date" in existing.columns:
         st.divider()
         st.subheader(f"📋 {sel} 저장된 데이터 ({len(day_data)}행)")
 
-        show_cols = ["session_id", "training_time_band", "event_code", "venue",
-                     "player_name", "temperature_c", "humidity_pct", "precipitation_mm",
-                     "total_distance_km", "max_speed", "source_filename"]
+        weather_cols = ["temperature_c", "humidity_pct", "precipitation_mm"]
+        id_cols      = ["session_id", "training_time_band", "event_code", "venue", "player_name"]
+        show_cols    = id_cols + weather_cols + GPS_METRIC_COLS
         st.dataframe(to_kr(day_data[[c for c in show_cols if c in day_data.columns]]),
                      use_container_width=True, hide_index=True)
 

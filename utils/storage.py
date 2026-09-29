@@ -146,7 +146,7 @@ def _worksheet(key: str):
     return _get_client().open(SHEET_NAMES[key]).sheet1
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def load(key: str) -> pd.DataFrame:
     ws   = _worksheet(key)
     data = ws.get_all_values()

@@ -118,10 +118,24 @@ st.subheader(f"📂 {sel} ({wd}) — GPS 업로드")
 
 if st.session_state.get("_scroll_to_form"):
     st.session_state._scroll_to_form = False
-    st.components.v1.html(
-        "<script>window.parent.document.querySelector('section.main').scrollTo({top: 99999, behavior: 'smooth'});</script>",
-        height=0,
-    )
+    st.components.v1.html("""
+        <script>
+        setTimeout(function() {
+            var targets = [
+                window.parent.document.querySelector('[data-testid="stMain"]'),
+                window.parent.document.querySelector('section.main'),
+                window.parent.document.querySelector('.main'),
+                window.parent.document.body
+            ];
+            for (var i = 0; i < targets.length; i++) {
+                if (targets[i]) {
+                    targets[i].scrollTo({top: targets[i].scrollHeight, behavior: 'smooth'});
+                    break;
+                }
+            }
+        }, 200);
+        </script>
+    """, height=0)
 
 if sel in uploaded:
     st.info("이 날짜는 이미 데이터가 있습니다. 추가 세션을 업로드하거나 저장하면 기존 데이터에 추가됩니다.")

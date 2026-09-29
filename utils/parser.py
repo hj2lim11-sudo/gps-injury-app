@@ -99,10 +99,17 @@ TREND_COL_MAP = {
     "Sprint 거리 (m)":                   "sprint_distance",
     "HSR 횟수 (times)":                  "hsr_count",
     "Sprint 횟수 (times)":               "sprint_count",
+    "최대 HSR 파워 (W/kg)":              "max_hsr_power",
+    "최대 Sprint 파워 (W/kg)":           "max_sprint_power",
+    "최대 HSR 거리 (m)":                 "max_hsr_distance",
+    "최대 Sprint 거리 (m)":              "max_sprint_distance",
     "High Acceleration 횟수 (times)":    "high_acc_count",
     "High Acceleration 거리 (m)":        "high_acc_distance",
     "High Deceleration 횟수 (times)":   "high_dec_count",
     "High Deceleration 거리 (m)":       "high_dec_distance",
+    "Medium Acceleration 횟수 (times)":  "med_acc_count",
+    "Medium Deceleration 횟수 (times)":  "med_dec_count",
+    "총 점프 횟수 (times)":              "jump_count",
     "뛴 거리 (ACR)":                     "acr_distance",
     "HSR 거리 (ACR)":                    "acr_hsr",
     "Sprint 거리 (ACR)":                 "acr_sprint",
@@ -112,17 +119,30 @@ TREND_COL_MAP = {
     "속도 3구간 거리 (km)":              "zone3_distance",
     "속도 4구간 거리 (km)":              "zone4_distance",
     "속도 5구간 거리 (km)":              "zone5_distance",
+    "속도 4구간 진입 횟수 (times)":      "zone4_count",
+    "속도 5구간 진입 횟수 (times)":      "zone5_count",
+    "속도 1구간 뛴 시간 (min sec)":      "zone1_time",
+    "속도 2구간 뛴 시간 (min sec)":      "zone2_time",
+    "속도 3구간 뛴 시간 (min sec)":      "zone3_time",
+    "속도 4구간 뛴 시간 (min sec)":      "zone4_time",
+    "속도 5구간 뛴 시간 (min sec)":      "zone5_time",
 }
 
 GPS_METRIC_COLS = [
     "total_distance_km", "distance_per_min", "max_speed",
     "hsr_distance", "sprint_distance", "hsr_count", "sprint_count",
+    "max_hsr_power", "max_sprint_power", "max_hsr_distance", "max_sprint_distance",
     "high_acc_count", "high_acc_distance", "high_dec_count", "high_dec_distance",
-    "max_acc", "max_dec", "acd_load",
-    "zone1_distance", "zone2_distance", "zone3_distance",
-    "zone4_distance", "zone5_distance",
+    "max_acc", "max_dec", "med_acc_count", "med_dec_count", "jump_count", "acd_load",
+    "zone1_distance", "zone2_distance", "zone3_distance", "zone4_distance", "zone5_distance",
+    "zone4_count", "zone5_count",
+    "zone1_time", "zone2_time", "zone3_time", "zone4_time", "zone5_time",
     "acr_distance", "acr_hsr", "acr_sprint", "acr_acd_load",
 ]
+
+# zone*_time은 "55' 25"" 형태의 문자열 — 수치 변환 제외
+_STRING_METRIC_COLS = {"zone1_time", "zone2_time", "zone3_time", "zone4_time", "zone5_time"}
+GPS_NUMERIC_COLS = [c for c in GPS_METRIC_COLS if c not in _STRING_METRIC_COLS]
 
 
 def _read_csv(file_bytes: bytes) -> pd.DataFrame:
@@ -267,7 +287,7 @@ def parse_details_csv(file_bytes: bytes) -> pd.DataFrame:
 
     total = total.copy()
     total["jersey_no"] = pd.to_numeric(total.get("jersey_no"), errors="coerce")
-    total = _to_numeric(total, GPS_METRIC_COLS)
+    total = _to_numeric(total, GPS_NUMERIC_COLS)
 
     keep = ["jersey_no", "player_name", "position"] + \
            [c for c in GPS_METRIC_COLS if c in total.columns]
@@ -306,7 +326,7 @@ def parse_daily_csv(file_bytes: bytes) -> pd.DataFrame:
         df["position"] = None
 
     df["jersey_no"] = pd.to_numeric(df["jersey_no"], errors="coerce")
-    df = _to_numeric(df, GPS_METRIC_COLS)
+    df = _to_numeric(df, GPS_NUMERIC_COLS)
 
     keep = ["jersey_no", "player_name", "position"] + \
            [c for c in GPS_METRIC_COLS if c in df.columns]
@@ -332,7 +352,7 @@ def parse_trend_full_csv(file_bytes: bytes) -> pd.DataFrame:
         df["jersey_no"] = None
 
     df["jersey_no"] = pd.to_numeric(df["jersey_no"], errors="coerce")
-    df = _to_numeric(df, GPS_METRIC_COLS)
+    df = _to_numeric(df, GPS_NUMERIC_COLS)
 
     keep = ["jersey_no", "player_name"] + \
            [c for c in GPS_METRIC_COLS if c in df.columns]

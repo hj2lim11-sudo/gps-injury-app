@@ -10,6 +10,9 @@ require_login()
 
 from utils.storage import load, GPS_METRIC_COLS, KR_COLS
 
+_STRING_METRIC_COLS = {"zone1_time", "zone2_time", "zone3_time", "zone4_time", "zone5_time"}
+GPS_NUMERIC_COLS = [c for c in GPS_METRIC_COLS if c not in _STRING_METRIC_COLS]
+
 def to_kr(df):
     return df.rename(columns={k: v for k, v in KR_COLS.items() if k in df.columns})
 st.title("📊 GPS · 날씨 데이터 조회")
@@ -28,8 +31,8 @@ if "session_date" not in gps.columns:
     st.stop()
 
 # 수치 변환
-for c in GPS_METRIC_COLS + ["temperature_c", "humidity_pct", "precipitation_mm",
-                             "session_duration_min"]:
+for c in GPS_NUMERIC_COLS + ["temperature_c", "humidity_pct", "precipitation_mm",
+                              "session_duration_min"]:
     if c in gps.columns:
         gps[c] = pd.to_numeric(gps[c], errors="coerce")
 gps["session_date"] = pd.to_datetime(gps["session_date"], errors="coerce")
@@ -95,7 +98,7 @@ with tab_all:
                        file_name="gps_data.csv", mime="text/csv")
 
 with tab_session:
-    num_cols = [c for c in GPS_METRIC_COLS if c in filtered.columns]
+    num_cols = [c for c in GPS_NUMERIC_COLS if c in filtered.columns]
     by_sess = (
         filtered.groupby(["session_date", "session_id", "training_time_band",
                           "event_code", "venue",
@@ -106,7 +109,7 @@ with tab_session:
     st.caption("선수 평균값")
 
 with tab_player:
-    num_cols = [c for c in GPS_METRIC_COLS if c in filtered.columns]
+    num_cols = [c for c in GPS_NUMERIC_COLS if c in filtered.columns]
     by_player = (
         filtered.groupby(["player_id", "jersey_no", "player_name"])[num_cols]
         .mean().round(2).reset_index()

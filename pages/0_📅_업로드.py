@@ -1,10 +1,10 @@
-"""달력 기반 GPS 데이터 업로드 — 날짜 선택 → 파일 업로드 → 날씨 자동 결합 → 저장."""
+"""달력 기반 GPS 데이터 업로드 — 날짜 선택 → 메타 입력 → 파일 업로드 → 날씨 자동 결합 → 저장."""
 import streamlit as st
 st.set_page_config(page_title="데이터 업로드", page_icon="📅", layout="wide")
 
 import pandas as pd
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from utils.auth import require_login
 require_login()
@@ -12,16 +12,18 @@ require_login()
 from utils.storage import (
     load, save, append_rows, next_session_seq,
     make_session_id, season_year_from_date, weekday_kr,
-    time_band_from_hour, GPS_META_COLS, GPS_METRIC_COLS,
-    TIME_BANDS, EVENT_CODES, KR_COLS,
+    GPS_META_COLS, GPS_METRIC_COLS, EVENT_CODES, KR_COLS,
 )
 
 def to_kr(df):
     return df.rename(columns={k: v for k, v in KR_COLS.items() if k in df.columns})
+
 from utils.parser import parse_gps_bytes
 from utils.weather import fetch_session_weather
 
 st.title("📅 GPS 데이터 업로드")
+
+UPLOAD_TIME_BANDS = ["AM", "PM"]
 
 # ── 세션 상태 초기화 ───────────────────────────────────────────────────────────
 if "selected_date" not in st.session_state:
@@ -31,12 +33,11 @@ if "num_sessions" not in st.session_state:
 if "_prev_date" not in st.session_state:
     st.session_state._prev_date = None
 
-# 날짜 바뀌면 세션 슬롯 초기화
 if st.session_state.selected_date != st.session_state._prev_date:
     st.session_state.num_sessions = 1
     st.session_state._prev_date = st.session_state.selected_date
 
-# ── GPS 업로드 현황 로드 ──────────────────────────────────────────────────────
+# ── 업로드 현황 로드 ──────────────────────────────────────────────────────────
 @st.cache_data(ttl=120)
 def _uploaded_dates():
     gps = load("gps")
@@ -61,7 +62,6 @@ st.divider()
 DAYS_HDR = ["월", "화", "수", "목", "금", "토", "일"]
 cal      = calendar.monthcalendar(int(year), int(month))
 
-# 요일 헤더
 hcols = st.columns(7)
 for i, d in enumerate(DAYS_HDR):
     color = "red" if i == 5 else ("blue" if i == 6 else "#333")
@@ -77,8 +77,8 @@ for week in cal:
             if day == 0:
                 st.markdown("<div style='height:64px'></div>", unsafe_allow_html=True)
                 continue
-            d_str    = f"{int(year):04d}-{int(month):02d}-{day:02d}"
-            d_date   = date(int(year), int(month), day)
+            d_str  = f"{int(year):04d}-{int(month):02d}-{day:02d}"
+            d_date = date(int(year), int(month), day)
             if d_date < MIN_DATE:
                 st.markdown("<div style='height:64px'></div>", unsafe_allow_html=True)
                 continue
@@ -126,7 +126,6 @@ if st.session_state.get("_scroll_to_form"):
 if sel in uploaded:
     st.info("이 날짜는 이미 데이터가 있습니다. 추가 세션을 업로드하거나 저장하면 기존 데이터에 추가됩니다.")
 
-# 선수 명단 (파싱 시 player_id 매칭용)
 players_df = load("players")
 VENUE_OPTIONS = [
     "명지대학교 자연캠퍼스", "서울", "수원", "인천", "춘천",
@@ -135,147 +134,176 @@ VENUE_OPTIONS = [
     "창원", "제주", "직접 입력",
 ]
 
-sessions_data = []  # 저장할 세션 목록
+sessions_data = []
 
 for idx in range(int(st.session_state.num_sessions)):
     st.markdown(f"#### 세션 {idx + 1}")
-    s_cols = st.columns([3, 1])
 
-    with s_cols[0]:
-        gps_file = st.file_uploader(
-            f"GPS 파일 (Excel/CSV)",
-            type=["xlsx", "xls", "csv"],
-            key=f"gps_file_{sel}_{idx}",
-            help="선수별 GPS 지표가 담긴 파일",
-        )
+    # ── 1) 시간 입력 ──────────────────────────────────────────────────────────
+    t1, t2 = st.columns(2)
+    start_str = t1.text_input("시작시간 (HH:MM)", "10:00", key=f"start_{sel}_{idx}")
+    end_str   = t2.text_input("종료시간 (HH:MM)", "12:00", key=f"end_{sel}_{idx}")
+    try:
+        start_h = int(start_str.split(":")[0])
+    except Exception:
+        start_h = 10
 
-    with s_cols[1]:
-        st.write("")
+    # ── 2) 장소 ───────────────────────────────────────────────────────────────
+    v1, v2 = st.columns([2, 2])
+    venue_sel = v1.selectbox("장소", VENUE_OPTIONS, key=f"venue_{sel}_{idx}")
+    if venue_sel == "직접 입력":
+        venue_txt = v2.text_input("장소 직접 입력", key=f"venue_txt_{sel}_{idx}")
+        venue = venue_txt
+    else:
+        venue = venue_sel
+
+    # ── 3) 시간대 (AM/PM 자동, 첫 렌더시만) ──────────────────────────────────
+    band_key = f"band_{sel}_{idx}"
+    if band_key not in st.session_state:
+        st.session_state[band_key] = "AM" if start_h < 12 else "PM"
+
+    # ── 4) 상대팀 먼저 → 이벤트 auto-MATCH ───────────────────────────────────
+    opp_key      = f"opp_{sel}_{idx}"
+    event_key    = f"event_{sel}_{idx}"
+    prev_opp_key = f"_prev_opp_{sel}_{idx}"
+
+    b1, b2, b3, b4 = st.columns(4)
+    band     = b1.selectbox("시간대", UPLOAD_TIME_BANDS, key=band_key)
+    opponent = b2.text_input("상대팀 (경기시)", key=opp_key)
+
+    current_opp = st.session_state.get(opp_key, "").strip()
+    prev_opp    = st.session_state.get(prev_opp_key, "").strip()
+    if current_opp and not prev_opp:
+        st.session_state[event_key] = "MATCH"
+    st.session_state[prev_opp_key] = current_opp
+
+    event     = b3.selectbox("이벤트", EVENT_CODES, key=event_key)
+    event_det = b4.text_input("경기명/훈련명", key=f"edet_{sel}_{idx}")
+
+    # ── 5) 파일 업로드 ────────────────────────────────────────────────────────
+    gps_file = st.file_uploader(
+        "GPS 파일 (Excel/CSV)",
+        type=["xlsx", "xls", "csv"],
+        key=f"gps_file_{sel}_{idx}",
+        help="Fitogether Trend CSV",
+    )
 
     if gps_file:
-        m1, m2, m3, m4 = st.columns(4)
-        start_str = m1.text_input("시작시간 (HH:MM)", "10:00",  key=f"start_{sel}_{idx}")
-        end_str   = m2.text_input("종료시간 (HH:MM)", "12:00",  key=f"end_{sel}_{idx}")
-        venue_sel = m3.selectbox("장소",   VENUE_OPTIONS,   key=f"venue_{sel}_{idx}")
-        venue_txt = m3.text_input("장소 직접 입력", key=f"venue_txt_{sel}_{idx}") if venue_sel == "직접 입력" else ""
-        venue     = venue_txt if venue_sel == "직접 입력" else venue_sel
-
-        m5, m6, m7 = st.columns(3)
-        try:
-            start_h = int(start_str.split(":")[0])
-        except Exception:
-            start_h = 10
-        auto_band = time_band_from_hour(start_h)
-        band      = m5.selectbox("시간대", TIME_BANDS,
-                                  index=TIME_BANDS.index(auto_band), key=f"band_{sel}_{idx}")
-        event     = m6.selectbox("이벤트", EVENT_CODES, key=f"event_{sel}_{idx}")
-        opponent  = m7.text_input("상대팀 (경기시)", key=f"opp_{sel}_{idx}")
-        event_det = st.text_input("경기명/훈련명 (선택)", key=f"edet_{sel}_{idx}")
-
         sessions_data.append({
-            "idx": idx, "file": gps_file,
+            "idx": idx, "file": gps_file, "filename": gps_file.name,
             "start": start_str, "end": end_str,
             "venue": venue, "band": band,
             "event": event, "opponent": opponent,
             "event_detail": event_det,
         })
     else:
-        st.caption("파일을 업로드하면 입력 폼이 나타납니다.")
+        st.caption("파일을 업로드하면 저장 버튼이 활성화됩니다.")
 
     st.markdown("---")
 
-col_add, col_save = st.columns([1, 3])
-with col_add:
+# ── 세션 추가 / 저장 / 다음 날짜 ─────────────────────────────────────────────
+next_date = (date.fromisoformat(sel) + timedelta(days=1)).isoformat()
+
+add_col, save_col, next_col = st.columns([1, 2, 1])
+
+with add_col:
     if st.session_state.num_sessions < 3:
         if st.button("➕ 세션 추가", use_container_width=True):
             st.session_state.num_sessions += 1
             st.rerun()
 
-with col_save:
-    if sessions_data and st.button("💾 저장 (날씨 자동 수집)", type="primary", use_container_width=True):
-        all_rows = []
-        errors   = []
-        progress = st.progress(0)
-        status   = st.empty()
+do_save = save_col.button(
+    "💾 저장 (날씨 자동 수집)",
+    type="primary",
+    use_container_width=True,
+    disabled=not sessions_data,
+)
 
-        for k, s in enumerate(sessions_data):
-            progress.progress((k + 1) / len(sessions_data))
-            status.info(f"세션 {k+1} 처리 중...")
+if next_col.button(f"▶ 다음 날짜 ({next_date})", use_container_width=True, key="next_day_btn"):
+    st.session_state.selected_date = next_date
+    st.session_state._prev_date    = next_date
+    st.rerun()
 
-            # 1) GPS 파싱
-            try:
-                file_bytes = s["file"].read()
-                gps_df = parse_gps_bytes(file_bytes, s["file"].name, players_df)
-            except Exception as e:
-                errors.append(f"세션 {k+1} 파싱 오류: {e}")
-                continue
+if do_save and sessions_data:
+    all_rows = []
+    errors   = []
+    progress = st.progress(0)
+    status   = st.empty()
 
-            if gps_df.empty:
-                errors.append(f"세션 {k+1}: GPS 데이터 없음")
-                continue
+    for k, s in enumerate(sessions_data):
+        progress.progress((k + 1) / len(sessions_data))
+        status.info(f"세션 {k+1} 처리 중...")
 
-            # 2) 날씨 수집
-            status.info(f"세션 {k+1} 날씨 수집 중... ({s['venue']})")
-            try:
-                start_h = int(s["start"].split(":")[0])
-                end_h   = int(s["end"].split(":")[0])
-                dur_min = max((end_h - start_h) * 60, 10)
-                wx = fetch_session_weather(s["venue"], sel, s["start"], dur_min)
-            except Exception as e:
-                wx = {}
-                errors.append(f"세션 {k+1} 날씨 오류: {e}")
+        try:
+            file_bytes = s["file"].read()
+            gps_df = parse_gps_bytes(file_bytes, s["file"].name, players_df)
+        except Exception as e:
+            errors.append(f"세션 {k+1} 파싱 오류: {e}")
+            continue
 
-            # 3) 세션 메타 조립
-            seq        = next_session_seq(sel, s["band"], s["event"])
-            session_id = make_session_id(sel, s["band"], s["event"], seq)
-            try:
-                t_start = datetime.strptime(s["start"], "%H:%M")
-                t_end   = datetime.strptime(s["end"],   "%H:%M")
-                dur_min = int((t_end - t_start).total_seconds() / 60)
-            except Exception:
-                dur_min = ""
+        if gps_df.empty:
+            errors.append(f"세션 {k+1}: GPS 데이터 없음")
+            continue
 
-            meta = {
-                "session_id":           session_id,
-                "season_year":          season_year_from_date(sel),
-                "session_date":         sel,
-                "weekday":              weekday_kr(sel),
-                "training_time_band":   s["band"],
-                "event_code":           s["event"],
-                "event_detail":         s["event_detail"],
-                "venue":                s["venue"],
-                "opponent":             s["opponent"],
-                "start_time":           s["start"],
-                "end_time":             s["end"],
-                "session_duration_min": dur_min,
-                "temperature_c":        wx.get("temperature_c", ""),
-                "humidity_pct":         wx.get("humidity_pct", ""),
-                "precipitation_mm":     wx.get("precipitation_mm", ""),
-            }
+        status.info(f"세션 {k+1} 날씨 수집 중... ({s['venue']})")
+        try:
+            start_h_s = int(s["start"].split(":")[0])
+            end_h     = int(s["end"].split(":")[0])
+            dur_est   = max((end_h - start_h_s) * 60, 10)
+            wx = fetch_session_weather(s["venue"], sel, s["start"], dur_est)
+        except Exception as e:
+            wx = {}
+            errors.append(f"세션 {k+1} 날씨 오류: {e}")
 
-            # 4) GPS 행마다 메타 결합
-            for col, val in meta.items():
-                gps_df[col] = val
+        seq        = next_session_seq(sel, s["band"], s["event"])
+        session_id = make_session_id(sel, s["band"], s["event"], seq)
+        try:
+            t_start = datetime.strptime(s["start"], "%H:%M")
+            t_end   = datetime.strptime(s["end"],   "%H:%M")
+            dur_min = int((t_end - t_start).total_seconds() / 60)
+        except Exception:
+            dur_min = ""
 
-            # 컬럼 순서 정렬
-            ordered = GPS_META_COLS + GPS_METRIC_COLS
-            gps_df  = gps_df.reindex(columns=[c for c in ordered if c in gps_df.columns])
-            all_rows.append(gps_df)
+        meta = {
+            "session_id":           session_id,
+            "season_year":          season_year_from_date(sel),
+            "session_date":         sel,
+            "weekday":              weekday_kr(sel),
+            "training_time_band":   s["band"],
+            "event_code":           s["event"],
+            "event_detail":         s["event_detail"],
+            "venue":                s["venue"],
+            "opponent":             s["opponent"],
+            "start_time":           s["start"],
+            "end_time":             s["end"],
+            "session_duration_min": dur_min,
+            "temperature_c":        wx.get("temperature_c", ""),
+            "humidity_pct":         wx.get("humidity_pct", ""),
+            "precipitation_mm":     wx.get("precipitation_mm", ""),
+            "source_filename":      s["filename"],
+        }
 
-        progress.progress(1.0)
+        for col, val in meta.items():
+            gps_df[col] = val
 
-        if all_rows:
-            combined = pd.concat(all_rows, ignore_index=True)
-            with st.spinner("Google Sheets에 저장 중..."):
-                append_rows("gps", combined)
-            _uploaded_dates.clear()
-            st.success(f"✅ {len(sessions_data)}개 세션, {len(combined)}행 저장 완료!")
-            st.balloons()
-            st.session_state.num_sessions = 1
-            st.rerun()
+        ordered = GPS_META_COLS + GPS_METRIC_COLS
+        gps_df  = gps_df.reindex(columns=[c for c in ordered if c in gps_df.columns])
+        all_rows.append(gps_df)
 
-        for e in errors:
-            st.error(e)
+    progress.progress(1.0)
+
+    if all_rows:
+        combined = pd.concat(all_rows, ignore_index=True)
+        with st.spinner("Google Sheets에 저장 중..."):
+            append_rows("gps", combined)
+        _uploaded_dates.clear()
+        st.success(f"✅ {len(sessions_data)}개 세션, {len(combined)}행 저장 완료!")
+        st.balloons()
+        st.session_state.num_sessions = 1
+        st.rerun()
+
+    for e in errors:
+        st.error(e)
 
 # ── 이 날짜 기존 데이터 미리보기 + 세션 삭제 ─────────────────────────────────
 existing = load("gps")
@@ -287,11 +315,10 @@ if not existing.empty and "session_date" in existing.columns:
 
         show_cols = ["session_id", "training_time_band", "event_code", "venue",
                      "player_name", "temperature_c", "humidity_pct", "precipitation_mm",
-                     "total_distance_km", "max_speed"]
+                     "total_distance_km", "max_speed", "source_filename"]
         st.dataframe(to_kr(day_data[[c for c in show_cols if c in day_data.columns]]),
                      use_container_width=True, hide_index=True)
 
-        # 세션 삭제
         sessions_on_day = day_data["session_id"].unique().tolist()
         st.markdown("**🗑️ 세션 삭제**")
         del_col1, del_col2 = st.columns([2, 1])
